@@ -1,0 +1,17 @@
+[package]
+name = "cloudflare-cli"
+version = "0.1.0"
+authors = ["Carlos Yakimov <carlos@cyakimov.com>"]
+license = "MIT/Apache-2.0"
+edition = "2018"
+keywords = ["cloudflare", "cli"]
+homepage = "https://github.com/cyakimov/cloudflare-cli"
+repository = "https://github.com/cyakimov/cloudflare-cli"
+categories = ["command-line-utilities"]
+
+[dependencies]
+clap = "2.33.0"
+cloudflare = { git = "https://github.com/cyakimov/cloudflare-rs", branch="add-missing-endpoints" }
+serde_json = "1.0"
+serde = "1.0.105"
+tabular = "0.1.4"
