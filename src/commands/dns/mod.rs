@@ -5,6 +5,7 @@ use cloudflare::framework::{
 use cloudflare::endpoints::dns::{DnsRecord, DnsContent, CreateDnsRecord, ListDnsRecords, ListDnsRecordsParams, CreateDnsRecordParams};
 use tabular::Row;
 use crate::commands::table_from_cols;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 pub struct ListParams<'a, 'b> {
     pub zone_id: &'a str,
@@ -16,6 +17,16 @@ pub struct ListParams<'a, 'b> {
 
 pub struct ListFilters<'a> {
     pub all: Option<&'a str>
+}
+
+pub struct CreateParams<'a> {
+    pub zone_id: &'a str,
+    pub name: &'a str,
+    pub ttl: u32,
+    pub proxied: bool,
+    pub content: &'a str,
+    pub record_type: &'a str,
+    pub priority: u16,
 }
 
 pub fn list(api: &HttpApiClient, params: ListParams) {
@@ -96,7 +107,37 @@ pub fn list(api: &HttpApiClient, params: ListParams) {
     }
 }
 
-pub fn create(api: &HttpApiClient, zone_id: &str, record: DnsRecord) {
+pub fn create(api: &HttpApiClient, zone_id: &str, record: CreateParams) {
+    let content: DnsContent = match record.record_type {
+        "AAAA" => {
+            let ip: Option<Ipv6Addr> = record.content.parse().ok();
+
+            match ip {
+                Some(content) => DnsContent::AAAA { content },
+                None => {
+                    println!("Invalid IPv6 address");
+                    return;
+                }
+            }
+        }
+        "CNAME" => DnsContent::CNAME { content: String::from(record.content) },
+        "MX" => DnsContent::MX { content: String::from(record.content), priority: record.priority },
+        "TXT" => DnsContent::TXT { content: String::from(record.content) },
+        "NS" => DnsContent::CNAME { content: String::from(record.content) },
+        // A record by default
+        _ => {
+            let ip: Option<Ipv4Addr> = record.content.parse().ok();
+
+            match ip {
+                Some(content) => DnsContent::A { content },
+                None => {
+                    println!("Invalid IPv4 address");
+                    return;
+                }
+            }
+        }
+    };
+
     let response = api.request(&CreateDnsRecord {
         zone_identifier: zone_id,
         params: CreateDnsRecordParams {
@@ -104,7 +145,7 @@ pub fn create(api: &HttpApiClient, zone_id: &str, record: DnsRecord) {
             priority: None,
             proxied: Some(record.proxied),
             name: &record.name,
-            content: record.content,
+            content,
         },
     });
 
@@ -113,6 +154,7 @@ pub fn create(api: &HttpApiClient, zone_id: &str, record: DnsRecord) {
             let record: DnsRecord = success.result;
             println!("DNS Record has been created with ID '{}'", record.id)
         }
+        // @todo abstract error formatting
         Err(failure) => println!("An error occurred {:?}", failure)
     }
 }
