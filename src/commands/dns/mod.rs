@@ -3,17 +3,34 @@ use cloudflare::framework::{
     HttpApiClient,
 };
 use cloudflare::endpoints::dns::{DnsRecord, DnsContent, CreateDnsRecord, ListDnsRecords, ListDnsRecordsParams, CreateDnsRecordParams};
-use tabular::{Row};
+use tabular::Row;
 use crate::commands::table_from_cols;
 
-pub fn list(api: &HttpApiClient, zone_id: &str, page: u32, limit: u32) {
+pub struct ListParams<'a, 'b> {
+    pub zone_id: &'a str,
+    pub page: u32,
+    pub limit: u32,
+    pub wide: bool,
+    pub filters: ListFilters<'b>,
+}
+
+pub struct ListFilters<'a> {
+    pub all: Option<&'a str>
+}
+
+pub fn list(api: &HttpApiClient, params: ListParams) {
+    let name = match params.filters.all {
+        Some(n) => Some(format!("contains:{}", n)),
+        _ => None
+    };
+
     let response = api.request(&ListDnsRecords {
-        zone_identifier: zone_id,
+        zone_identifier: params.zone_id,
         params: ListDnsRecordsParams {
             record_type: None,
-            name: None,
-            page: Some(page),
-            per_page: Some(limit),
+            name,
+            page: Some(params.page),
+            per_page: Some(params.limit),
             order: None,
             direction: None,
             search_match: None,
@@ -23,14 +40,30 @@ pub fn list(api: &HttpApiClient, zone_id: &str, page: u32, limit: u32) {
     match response {
         Ok(success) => {
             let list: Vec<DnsRecord> = success.result;
-            let columns = vec![
-                "ID",
-                "NAME",
-                "TYPE",
-                "CONTENT",
-                "TTL",
-                "PROXY",
-            ];
+
+            let columns = if params.wide {
+                vec![
+                    "ID",
+                    "NAME",
+                    "TYPE",
+                    "CONTENT",
+                    "TTL",
+                    "PROXY",
+                    "LOCKED",
+                    "CREATED",
+                    "MODIFIED",
+                ]
+            } else {
+                vec![
+                    "ID",
+                    "NAME",
+                    "TYPE",
+                    "CONTENT",
+                    "TTL",
+                    "PROXY",
+                ]
+            };
+
             let mut table = table_from_cols(columns);
 
             for record in list {
@@ -45,7 +78,15 @@ pub fn list(api: &HttpApiClient, zone_id: &str, page: u32, limit: u32) {
                     DnsContent::TXT { content: c } => row.add_cell("TXT").add_cell(c),
                 };
 
-                row.add_cell(record.ttl).add_cell(if record.proxied { "Yes" } else { "No" });
+                let ttl = format!("{}", record.ttl);
+                row.add_cell(if ttl == "1" { "Auto" } else { &ttl })
+                    .add_cell(if record.proxied { "Yes" } else { "No" });
+
+                if params.wide {
+                    row.add_cell(if record.locked { "Yes" } else { "No" })
+                        .add_cell(record.created_on)
+                        .add_cell(record.modified_on);
+                }
 
                 table.add_row(row);
             }

@@ -1,5 +1,3 @@
-extern crate clap;
-
 use clap::{AppSettings, Arg, App, SubCommand};
 #[allow(unused_imports)]
 use cloudflare::framework::{
@@ -10,9 +8,9 @@ use cloudflare::framework::{
     HttpApiClientConfig,
 };
 use cloudflare_cli::commands::{
-    accounts,
     dns,
     zones,
+    accounts
 };
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -51,12 +49,6 @@ fn main() {
         .validator(is_u32)
         .takes_value(true);
 
-    let zone_arg = Arg::with_name("zone")
-        .short("z")
-        .long("zone_id")
-        .takes_value(true)
-        .required(true);
-
     let commands = vec![
         SubCommand::with_name("config"),
         SubCommand::with_name("accounts")
@@ -68,13 +60,17 @@ fn main() {
             ]).setting(AppSettings::ArgRequiredElseHelp),
         SubCommand::with_name("zones")
             .subcommands(vec![
-                SubCommand::with_name("list").arg(
-                    limit.clone().default_value("50")
-                ),
+                SubCommand::with_name("list")
+                    .arg(limit.clone().default_value("50")),
             ]).setting(AppSettings::ArgRequiredElseHelp),
         SubCommand::with_name("dns")
             .subcommands(vec![
-                SubCommand::with_name("list").arg(zone_arg),
+                SubCommand::with_name("list")
+                    .arg(Arg::with_name("zone").takes_value(true).required(true))
+                    .arg(Arg::with_name("wide").long("wide").short("w"))
+                    .arg(Arg::with_name("name").long("name").short("n")
+                        .takes_value(true).help("Filter by name. Performs partial matching"))
+                    .arg(limit.clone().default_value("50")),
                 SubCommand::with_name("describe"),
             ]).setting(AppSettings::ArgRequiredElseHelp),
     ];
@@ -114,14 +110,24 @@ fn main() {
             ("list", Some(cmd)) => {
                 let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
                 accounts::list(&api, 1, limit)
-            },
+            }
             _ => {}
         },
         ("dns", Some(sub_cmd)) => match sub_cmd.subcommand() {
             ("list", Some(cmd)) => {
                 let zone = cmd.value_of("zone").unwrap();
                 let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
-                dns::list(&api, zone, 1, limit)
+                let wide = cmd.is_present("wide");
+                let name = cmd.value_of("name");
+
+                let params = dns::ListParams{
+                    zone_id: zone,
+                    page: 1,
+                    limit,
+                    wide,
+                    filters: dns::ListFilters { all: name }
+                };
+                dns::list(&api, params)
             }
             ("describe", Some(_)) => {}
             _ => {}
