@@ -47,24 +47,32 @@ fn valid_ttl(arg: String) -> Result<(), String> {
 fn main() {
     let auth_args = vec![
         Arg::with_name("email")
+            .global(true)
             .long("email")
             .short("e")
             .help("Email address associated with your account")
             .takes_value(true)
             .env("CF_EMAIL"),
         Arg::with_name("key")
+            .global(true)
             .long("key")
             .short("k")
             .help("API token generated on the \"My Account\" page")
             .takes_value(true)
             .env("CF_KEY"),
         Arg::with_name("token")
+            .global(true)
             .long("token")
             .short("t")
             .help("API token generated on the \"My Account\" page")
             .takes_value(true)
             .env("CF_TOKEN"),
     ];
+    let zone = Arg::with_name("zone")
+        .long("zone-id")
+        .short("z")
+        .takes_value(true)
+        .required(true);
     let limit = Arg::with_name("limit")
         .short("l")
         .long("limit")
@@ -88,23 +96,26 @@ fn main() {
         SubCommand::with_name("dns")
             .subcommands(vec![
                 SubCommand::with_name("list")
-                    .arg(Arg::with_name("zone").takes_value(true).required(true))
+                    .arg(zone.clone())
                     .arg(Arg::with_name("wide").long("wide").short("w"))
                     .arg(Arg::with_name("name").long("name").short("n")
                         .takes_value(true).help("Filter by name. Performs partial matching"))
                     .arg(limit.clone().default_value("50")),
-                SubCommand::with_name("describe"),
+                SubCommand::with_name("delete")
+                    .arg(zone.clone())
+                    .arg(
+                        Arg::with_name("id")
+                            .required(true)
+                            .min_values(1)
+                            .help("Record identifier. Multiple values can be provided")
+                    ),
                 SubCommand::with_name("create")
                     .arg(Arg::with_name("name")
                         .takes_value(true)
                         .required(true)
                         .help("DNS record name")
                     )
-                    .arg(Arg::with_name("zone")
-                        .short("z")
-                        .long("zone-id")
-                        .takes_value(true)
-                        .required(true))
+                    .arg(zone.clone())
                     .arg(Arg::with_name("content")
                         .short("c")
                         .long("content")
@@ -195,7 +206,6 @@ fn main() {
                 };
                 dns::list(&api, params)
             }
-            ("describe", Some(_)) => {}
             ("create", Some(cmd)) => {
                 let zone = cmd.value_of("zone").unwrap();
                 let content = cmd.value_of("content").unwrap();
@@ -216,6 +226,12 @@ fn main() {
                 };
 
                 dns::create(&api, zone, record)
+            }
+            ("delete", Some(cmd)) => {
+                let id: Vec<_> = cmd.values_of("id").unwrap().collect();
+                let zone = cmd.value_of("zone").unwrap();
+
+                dns::delete(&api, zone, id)
             }
             _ => {}
         },

@@ -2,7 +2,7 @@ use cloudflare::framework::{
     apiclient::ApiClient,
     HttpApiClient,
 };
-use cloudflare::endpoints::dns::{DnsRecord, DnsContent, CreateDnsRecord, ListDnsRecords, ListDnsRecordsParams, CreateDnsRecordParams};
+use cloudflare::endpoints::dns::{DnsRecord, DnsContent, CreateDnsRecord, ListDnsRecords, ListDnsRecordsParams, CreateDnsRecordParams, DeleteDnsRecord, DeleteDnsRecordResponse};
 use tabular::Row;
 use crate::commands::table_from_cols;
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -152,9 +152,28 @@ pub fn create(api: &HttpApiClient, zone_id: &str, record: CreateParams) {
     match response {
         Ok(success) => {
             let record: DnsRecord = success.result;
-            println!("DNS Record has been created with ID '{}'", record.id)
+            // @todo print complete record formatted
+            println!("Record \"{}\" created", record.id)
         }
         // @todo abstract error formatting
         Err(failure) => println!("An error occurred {:?}", failure)
+    }
+}
+
+pub fn delete(api: &HttpApiClient, zone_id: &str, ids: Vec<&str>) {
+    for id in ids {
+        let response = api.request(&DeleteDnsRecord {
+            zone_identifier: zone_id,
+            identifier: id,
+        });
+
+        match response {
+            Ok(success) => {
+                let record: DeleteDnsRecordResponse = success.result;
+                println!("Record \"{}\" deleted", record.id)
+            }
+            // @todo abstract error formatting
+            Err(failure) => println!("An error occurred {:?}", failure)
+        }
     }
 }
