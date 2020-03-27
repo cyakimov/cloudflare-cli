@@ -2,7 +2,7 @@ use cloudflare::framework::{
     apiclient::ApiClient,
     HttpApiClient,
 };
-use cloudflare::endpoints::dns::{DnsRecord, DnsContent, CreateDnsRecord, ListDnsRecords, ListDnsRecordsParams, CreateDnsRecordParams, DeleteDnsRecord, DeleteDnsRecordResponse};
+use cloudflare::endpoints::dns::{DnsRecord, DnsContent, CreateDnsRecord, ListDnsRecords, ListDnsRecordsParams, CreateDnsRecordParams, DeleteDnsRecord, DeleteDnsRecordResponse, DnsRecordDetails, UpdateDnsRecord, UpdateDnsRecordParams};
 use tabular::Row;
 use crate::commands::table_from_cols;
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -27,6 +27,41 @@ pub struct CreateParams<'a> {
     pub content: &'a str,
     pub record_type: &'a str,
     pub priority: u16,
+}
+
+pub struct UpdateParams<'a> {
+    pub id: &'a str,
+    pub zone_id: &'a str,
+    pub name: Option<&'a str>,
+    pub ttl: Option<u32>,
+    pub proxied: Option<bool>,
+    pub content: Option<&'a str>,
+}
+
+fn resolve_content(record_type: &str, content: &str, priority: u16) -> Result<DnsContent, &'static str> {
+    match record_type {
+        "A" => {
+            let ip: Option<Ipv4Addr> = content.parse().ok();
+
+            match ip {
+                Some(content) => Ok(DnsContent::A { content }),
+                None => Err("Invalid IPv4 address")
+            }
+        }
+        "AAAA" => {
+            let ip: Option<Ipv6Addr> = content.parse().ok();
+
+            match ip {
+                Some(content) => Ok(DnsContent::AAAA { content }),
+                None => Err("Invalid IPv6 address")
+            }
+        }
+        "CNAME" => Ok(DnsContent::CNAME { content: String::from(content) }),
+        "MX" => Ok(DnsContent::MX { content: String::from(content), priority }),
+        "TXT" => Ok(DnsContent::TXT { content: String::from(content) }),
+        "NS" => Ok(DnsContent::CNAME { content: String::from(content) }),
+        _ => Err("Record type not supported")
+    }
 }
 
 pub fn list(api: &HttpApiClient, params: ListParams) {
@@ -107,39 +142,17 @@ pub fn list(api: &HttpApiClient, params: ListParams) {
     }
 }
 
-pub fn create(api: &HttpApiClient, zone_id: &str, record: CreateParams) {
-    let content: DnsContent = match record.record_type {
-        "AAAA" => {
-            let ip: Option<Ipv6Addr> = record.content.parse().ok();
-
-            match ip {
-                Some(content) => DnsContent::AAAA { content },
-                None => {
-                    println!("Invalid IPv6 address");
-                    return;
-                }
-            }
-        }
-        "CNAME" => DnsContent::CNAME { content: String::from(record.content) },
-        "MX" => DnsContent::MX { content: String::from(record.content), priority: record.priority },
-        "TXT" => DnsContent::TXT { content: String::from(record.content) },
-        "NS" => DnsContent::CNAME { content: String::from(record.content) },
-        // A record by default
-        _ => {
-            let ip: Option<Ipv4Addr> = record.content.parse().ok();
-
-            match ip {
-                Some(content) => DnsContent::A { content },
-                None => {
-                    println!("Invalid IPv4 address");
-                    return;
-                }
-            }
+pub fn create(api: &HttpApiClient, record: CreateParams) {
+    let content = match resolve_content(record.record_type, record.content, record.priority) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("{}", e);
+            return;
         }
     };
 
     let response = api.request(&CreateDnsRecord {
-        zone_identifier: zone_id,
+        zone_identifier: record.zone_id,
         params: CreateDnsRecordParams {
             ttl: Some(record.ttl),
             priority: None,
@@ -174,6 +187,66 @@ pub fn delete(api: &HttpApiClient, zone_id: &str, ids: Vec<&str>) {
             }
             // @todo abstract error formatting
             Err(failure) => println!("An error occurred {:?}", failure)
+        }
+    }
+}
+
+pub fn update(api: &HttpApiClient, input: UpdateParams) {
+    let get_response = api.request(&DnsRecordDetails {
+        zone_identifier: input.zone_id,
+        identifier: input.id,
+    });
+
+    match get_response {
+        Err(failure) => println!("{:?}", failure),
+        Ok(success) => {
+            let record: DnsRecord = success.result;
+
+            let record_type = match record.content {
+                DnsContent::A { content: _ } => "A",
+                DnsContent::AAAA { content: _ } => "AAAA",
+                DnsContent::CNAME { content: _ } => "CNAME",
+                DnsContent::NS { content: _ } => "NS",
+                DnsContent::MX { content: _, priority: _ } => "MX",
+                DnsContent::TXT { content: _ } => "TXT",
+            };
+
+            let content = match input.content {
+                Some(content) => {
+                    match resolve_content(record_type, content, 1) {
+                        Ok(resolved) => resolved,
+                        Err(e) => {
+                            println!("{}", e);
+                            return;
+                        }
+                    }
+                }
+                None => record.content
+            };
+
+            let name: &str = match input.name {
+                Some(n) => n,
+                None => &record.name
+            };
+            let response = api.request(&UpdateDnsRecord {
+                zone_identifier: input.zone_id,
+                identifier: input.id,
+                params: UpdateDnsRecordParams {
+                    ttl: input.ttl.or(Some(record.ttl)),
+                    proxied: input.proxied.or(Some(record.proxied)),
+                    name,
+                    content,
+                },
+            });
+
+            match response {
+                Ok(success) => {
+                    let record: DnsRecord = success.result;
+                    println!("Record {} updated", record.id)
+                }
+                // @todo abstract error formatting
+                Err(failure) => println!("An error occurred {:?}", failure)
+            }
         }
     }
 }

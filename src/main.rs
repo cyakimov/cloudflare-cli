@@ -78,6 +78,10 @@ fn main() {
         .long("limit")
         .validator(valid_u32)
         .takes_value(true);
+    let record_type = Arg::with_name("type")
+        .long("type")
+        .takes_value(true)
+        .possible_values(&["A", "AAAA", "CNAME", "MX", "TXT", "NS"]);
 
     let commands = vec![
         SubCommand::with_name("config"),
@@ -123,12 +127,7 @@ fn main() {
                         .required(true)
                         .help("DNS record content")
                     )
-                    .arg(Arg::with_name("type")
-                        .long("type")
-                        .takes_value(true)
-                        .possible_values(&["A", "AAAA", "CNAME", "MX", "TXT", "NS"])
-                        .default_value("A")
-                        .required(true))
+                    .arg(record_type.clone().required(true).default_value("A"))
                     .arg(Arg::with_name("ttl")
                         .long("ttl")
                         .validator(valid_ttl)
@@ -139,7 +138,6 @@ fn main() {
                     )
                     .arg(Arg::with_name("proxied")
                         .long("proxied")
-                        .validator(valid_priority)
                         .help("Used with some records like MX and SRV to determine priority")
                     )
                     .arg(Arg::with_name("priority")
@@ -148,6 +146,37 @@ fn main() {
                         .takes_value(true)
                         .default_value("0")
                         .help("Used with some records like MX and SRV to determine priority")
+                    ),
+                SubCommand::with_name("update")
+                    .arg(Arg::with_name("id")
+                        .takes_value(true)
+                        .help("DNS record id")
+                        .required(true)
+                    )
+                    .arg(Arg::with_name("name")
+                        .short("n")
+                        .long("name")
+                        .takes_value(true)
+                        .help("DNS record name")
+                    )
+                    .arg(zone.clone())
+                    .arg(Arg::with_name("content")
+                        .short("c")
+                        .long("content")
+                        .takes_value(true)
+                        .help("DNS record content")
+                    )
+                    .arg(Arg::with_name("ttl")
+                        .long("ttl")
+                        .validator(valid_ttl)
+                        .takes_value(true)
+                        .help("Time to live for DNS record. Value of 1 is 'automatic'")
+                    )
+                    .arg(Arg::with_name("proxied")
+                        .long("proxied")
+                        .takes_value(true)
+                        .possible_values(&["0", "1", "true", "false"])
+                        .help("Whether the record would be proxied by Cloudflare")
                     )
             ]).setting(AppSettings::ArgRequiredElseHelp),
     ];
@@ -225,7 +254,41 @@ fn main() {
                     priority,
                 };
 
-                dns::create(&api, zone, record)
+                dns::create(&api, record)
+            }
+            ("update", Some(cmd)) => {
+                let id = cmd.value_of("id").unwrap();
+                let zone_id = cmd.value_of("zone").unwrap();
+                let content = cmd.value_of("content");
+                let name = cmd.value_of("name");
+
+                let ttl: Option<u32> = match cmd.value_of("ttl") {
+                    Some(val) => {
+                        match val.parse() {
+                            Ok(ttl) => Some(ttl),
+                            Err(_) => None
+                        }
+                    }
+                    None => None,
+                };
+                let proxied = match cmd.value_of("proxied") {
+                    Some(val) => match val {
+                        "1" | "true" => Some(true),
+                        _ => Some(false)
+                    },
+                    None => None
+                };
+
+                let record = dns::UpdateParams {
+                    id,
+                    zone_id,
+                    name,
+                    ttl,
+                    proxied,
+                    content,
+                };
+
+                dns::update(&api, record)
             }
             ("delete", Some(cmd)) => {
                 let id: Vec<_> = cmd.values_of("id").unwrap().collect();
