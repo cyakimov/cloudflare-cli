@@ -1,4 +1,4 @@
-use clap::{AppSettings, Arg, App, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 #[allow(unused_imports)]
 use cloudflare::framework::{
     apiclient::ApiClient,
@@ -7,10 +7,11 @@ use cloudflare::framework::{
     HttpApiClient,
     HttpApiClientConfig,
 };
+
 use cloudflare_cli::commands::{
+    accounts,
     dns,
     zones,
-    accounts,
 };
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");

@@ -1,14 +1,15 @@
+use cloudflare::endpoints::account::{
+    Account,
+    list_accounts::ListAccountsParams,
+    ListAccounts,
+};
 use cloudflare::framework::{
     apiclient::ApiClient,
     HttpApiClient,
     OrderDirection,
 };
-use cloudflare::endpoints::account::{
-    Account,
-    ListAccounts,
-    list_accounts::ListAccountsParams,
-};
-use tabular::{Row};
+use tabular::Row;
+
 use crate::commands::table_from_cols;
 
 pub fn list(api: &HttpApiClient, page: u32, limit: u32) {

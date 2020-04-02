@@ -1,8 +1,10 @@
-use cloudflare::framework::{apiclient::ApiClient, HttpApiClient, OrderDirection};
-use tabular::{Row};
-use cloudflare::endpoints::zone::{ListZones, ListZonesParams, Zone};
-use cloudflare::framework::response::{ApiFailure, ApiResponse};
 use std::error::Error;
+
+use cloudflare::endpoints::zone::{ListZones, ListZonesParams, Zone};
+use cloudflare::framework::{apiclient::ApiClient, HttpApiClient, OrderDirection};
+use cloudflare::framework::response::{ApiFailure, ApiResponse};
+use tabular::Row;
+
 use crate::commands::table_from_cols;
 
 pub fn list(api: &HttpApiClient, page: u32, limit: u32) {

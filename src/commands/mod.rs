@@ -1,8 +1,8 @@
+use tabular::{Row, Table};
+
 pub mod accounts;
 pub mod dns;
 pub mod zones;
-
-use tabular::{Table, Row};
 
 fn table_from_cols(columns: Vec<&str>) -> Table {
     let cols: Vec<&str> = columns.iter().map(|_| "{:<}").collect();
