@@ -8,14 +8,12 @@ cloudflare-cli (cflare)
 #### Install with cargo
 
 ```shell script
-cargo install cloudflare-cli
+cargo install cflare
 ```
-
-TBD
 
 ### 📚 Usage
 
-List available flags with `cf -h`
+List available commands with `cflare -h`
 
 ```
 Cloudflare command-line tool
@@ -28,14 +26,14 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-    -e, --email <email>    Email address associated with your account [env: CF_EMAIL=]
-    -k, --key <key>        API token generated on the "My Account" page [env: CF_KEY=]
-    -t, --token <token>    API token generated on the "My Account" page [env: CF_TOKEN=]
+    -e, --email <email>    Email address associated with your account
+    -k, --key <key>        API key generated on the "My Account" page
+    -t, --token <token>    API token generated on the "My Account" page
 
 SUBCOMMANDS:
     accounts
     config
     dns
-    help        Prints this message or the help of the given subcommand(s)
     zones
+    help
 ```

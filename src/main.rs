@@ -1,4 +1,5 @@
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
+use cloudflare::endpoints::zone::{ListZones, ListZonesParams, Zone};
 #[allow(unused_imports)]
 use cloudflare::framework::{
     apiclient::ApiClient,
@@ -7,15 +8,18 @@ use cloudflare::framework::{
     HttpApiClient,
     HttpApiClientConfig,
 };
+use cloudflare::framework::response::ApiResponse;
 
-use cloudflare_cli::commands::{
+use cflare::commands::{
     accounts,
+    config,
     dns,
     zones,
 };
+use cflare::terminal;
+use cflare::config::{get_global_config_path, Config};
 
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-const MAX_TTL: u32 = 2_147_483_647;
+const MAX_DNS_TTL: u32 = 2_147_483_647;
 
 fn valid_u32(arg: String) -> Result<(), String> {
     match arg.parse::<u32>() {
@@ -36,13 +40,94 @@ fn valid_ttl(arg: String) -> Result<(), String> {
 
     match ttl {
         Ok(value) => {
-            if value < 1 || value > MAX_TTL {
-                return Err(String::from(format!("Value must be between 1 and {} seconds", MAX_TTL)));
+            if value < 1 || value > MAX_DNS_TTL {
+                return Err(String::from(format!("Value must be between 1 and {} seconds", MAX_DNS_TTL)));
             }
             Ok(())
         }
         Err(_) => Err(format!("Value must be an integer; received: {}", arg))
     }
+}
+
+fn resolve_zone(api: &HttpApiClient, arg: &ArgMatches) -> String {
+    if arg.is_present("zone-id") { arg.value_of("zone-id").unwrap().to_owned() } else {
+        let zone = arg.value_of("zone").unwrap();
+        let res: ApiResponse<Vec<Zone>> = api.request(&ListZones {
+            params: ListZonesParams {
+                name: Some(String::from(zone)),
+                status: None,
+                page: None,
+                per_page: Some(1),
+                order: None,
+                direction: None,
+                search_match: None,
+            }
+        });
+
+        match res {
+            Ok(success) => {
+                let zones = success.result;
+                match zones.len() {
+                    1 => zones[0].id.clone(),
+                    _ => {
+                        terminal::error(format!("Zone \"{}\" not found", zone).as_str());
+                        std::process::exit(1);
+                    }
+                }
+            }
+            Err(e) => {
+                println!("{}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+fn get_api_client(args: &ArgMatches) -> HttpApiClient {
+    let credentials: Credentials;
+    let config_file = get_global_config_path().unwrap();
+    let cred_flags = args.is_present("email") || args.is_present("key") || args.is_present("token");
+    if !config_file.exists() && !cred_flags {
+        terminal::warn("Config file does not exist. Try running `cflare config`");
+        std::process::exit(1);
+    }
+
+    // Set credentials from flags/env
+    if cred_flags {
+        let email = args.value_of("email");
+        let key = args.value_of("key");
+        let token = args.value_of("token");
+
+        credentials = if let Some(key) = key {
+            Credentials::UserAuthKey {
+                email: email.unwrap().to_string(),
+                key: key.to_string(),
+            }
+        } else if let Some(token) = token {
+            Credentials::UserAuthToken {
+                token: token.to_string(),
+            }
+        } else {
+            terminal::error("Either API token or API key + email pair must be provided");
+            std::process::exit(1);
+        };
+    } else {
+        let config: Config = match Config::from_file(config_file) {
+            Ok(c) => c,
+            Err(e) => {
+                terminal::error(format!("{}", e).as_str());
+                std::process::exit(1);
+            }
+        };
+        let cred = &config.contexts[0].credential;
+        credentials = Credentials::from(cred.to_owned());
+    }
+
+    HttpApiClient::new(
+        credentials,
+        HttpApiClientConfig::default(),
+        Environment::Production,
+    ).unwrap()
 }
 
 fn main() {
@@ -53,27 +138,34 @@ fn main() {
             .short("e")
             .help("Email address associated with your account")
             .takes_value(true)
-            .env("CF_EMAIL"),
+            .env("CFLARE_EMAIL"),
         Arg::with_name("key")
             .global(true)
             .long("key")
             .short("k")
             .help("API token generated on the \"My Account\" page")
             .takes_value(true)
-            .env("CF_KEY"),
+            .env("CFLARE_KEY"),
         Arg::with_name("token")
             .global(true)
             .long("token")
             .short("t")
             .help("API token generated on the \"My Account\" page")
             .takes_value(true)
-            .env("CF_TOKEN"),
+            .env("CFLARE_TOKEN"),
     ];
     let zone = Arg::with_name("zone")
+        .help("Zone name. e.g. mydomain.com")
+        .long("zone")
+        .takes_value(true);
+    let zone_id = Arg::with_name("zone-id")
         .long("zone-id")
         .short("z")
         .takes_value(true)
-        .required(true);
+        .required_unless("zone");
+
+    let zone_args = [zone, zone_id];
+
     let limit = Arg::with_name("limit")
         .short("l")
         .long("limit")
@@ -85,29 +177,29 @@ fn main() {
         .possible_values(&["A", "AAAA", "CNAME", "MX", "TXT", "NS"]);
 
     let commands = vec![
-        SubCommand::with_name("config"),
+        SubCommand::with_name("config").help("Setup your Cloudflare account"),
         SubCommand::with_name("accounts")
             .subcommands(vec![
                 SubCommand::with_name("list").arg(
                     limit.clone().default_value("50")
                 ),
                 SubCommand::with_name("describe"),
-            ]).setting(AppSettings::ArgRequiredElseHelp),
+            ]),
         SubCommand::with_name("zones")
             .subcommands(vec![
                 SubCommand::with_name("list")
                     .arg(limit.clone().default_value("50")),
-            ]).setting(AppSettings::ArgRequiredElseHelp),
+            ]),
         SubCommand::with_name("dns")
             .subcommands(vec![
                 SubCommand::with_name("list")
-                    .arg(zone.clone())
+                    .args(&zone_args.clone())
                     .arg(Arg::with_name("wide").long("wide").short("w"))
                     .arg(Arg::with_name("name").long("name").short("n")
                         .takes_value(true).help("Filter by name. Performs partial matching"))
                     .arg(limit.clone().default_value("50")),
                 SubCommand::with_name("delete")
-                    .arg(zone.clone())
+                    .args(&zone_args.clone())
                     .arg(
                         Arg::with_name("id")
                             .required(true)
@@ -120,7 +212,7 @@ fn main() {
                         .required(true)
                         .help("DNS record name")
                     )
-                    .arg(zone.clone())
+                    .args(&zone_args.clone())
                     .arg(Arg::with_name("content")
                         .short("c")
                         .long("content")
@@ -160,7 +252,7 @@ fn main() {
                         .takes_value(true)
                         .help("DNS record name")
                     )
-                    .arg(zone.clone())
+                    .args(&zone_args.clone())
                     .arg(Arg::with_name("content")
                         .short("c")
                         .long("content")
@@ -179,56 +271,46 @@ fn main() {
                         .possible_values(&["0", "1", "true", "false"])
                         .help("Whether the record would be proxied by Cloudflare")
                     )
-            ]).setting(AppSettings::ArgRequiredElseHelp),
+            ]),
     ];
 
-    let app = App::new("Cloudflare command-line tool")
-        .version(VERSION)
+    let app = App::new("cflare")
+        .name(env!("CARGO_PKG_NAME"))
+        .about(env!("CARGO_PKG_DESCRIPTION"))
+        .version(env!("CARGO_PKG_VERSION"))
         .subcommands(commands)
         .setting(AppSettings::ArgRequiredElseHelp)
         .args(&auth_args)
         .get_matches();
 
-    let email = app.value_of("email");
-    let key = app.value_of("key");
-    let token = app.value_of("token");
-
-    let credentials: Credentials = if let Some(key) = key {
-        Credentials::UserAuthKey {
-            email: email.unwrap().to_string(),
-            key: key.to_string(),
+    if app.subcommand().0 == "config" {
+        let input: String = terminal::prompt("Enter API Token:");
+        let credential = cflare::config::GlobalCredential::Token { api_token: input };
+        if let Err(e) = config::save_credential(&credential) {
+            terminal::error(format!("{}", e).as_str());
+            std::process::exit(1);
         }
-    } else if let Some(token) = token {
-        Credentials::UserAuthToken {
-            token: token.to_string(),
-        }
-    } else {
-        panic!("Either API token or API key + email pair must be provided")
-    };
+        return;
+    }
 
-    let api = HttpApiClient::new(
-        credentials,
-        HttpApiClientConfig::default(),
-        Environment::Production,
-    ).unwrap();
-
+    let api = get_api_client(&app);
     match app.subcommand() {
         ("accounts", Some(sub_cmd)) => match sub_cmd.subcommand() {
             ("list", Some(cmd)) => {
                 let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
                 accounts::list(&api, 1, limit)
             }
-            _ => {}
+            _ => terminal::error("Unknown command")
         },
         ("dns", Some(sub_cmd)) => match sub_cmd.subcommand() {
             ("list", Some(cmd)) => {
-                let zone = cmd.value_of("zone").unwrap();
+                let zone = resolve_zone(&api, cmd);
                 let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
                 let wide = cmd.is_present("wide");
                 let name = cmd.value_of("name");
 
                 let params = dns::ListParams {
-                    zone_id: zone,
+                    zone_id: &zone,
                     page: 1,
                     limit,
                     wide,
@@ -237,7 +319,7 @@ fn main() {
                 dns::list(&api, params)
             }
             ("create", Some(cmd)) => {
-                let zone = cmd.value_of("zone").unwrap();
+                let zone = resolve_zone(&api, cmd);
                 let content = cmd.value_of("content").unwrap();
                 let record_type = cmd.value_of("type").unwrap();
                 let proxied = cmd.is_present("proxied");
@@ -246,7 +328,7 @@ fn main() {
                 let priority: u16 = cmd.value_of("priority").unwrap().parse().unwrap();
 
                 let record = dns::CreateParams {
-                    zone_id: zone,
+                    zone_id: &zone,
                     name,
                     ttl,
                     proxied,
@@ -259,7 +341,7 @@ fn main() {
             }
             ("update", Some(cmd)) => {
                 let id = cmd.value_of("id").unwrap();
-                let zone_id = cmd.value_of("zone").unwrap();
+                let zone_id = resolve_zone(&api, cmd);
                 let content = cmd.value_of("content");
                 let name = cmd.value_of("name");
 
@@ -282,7 +364,7 @@ fn main() {
 
                 let record = dns::UpdateParams {
                     id,
-                    zone_id,
+                    zone_id: &zone_id,
                     name,
                     ttl,
                     proxied,
@@ -293,9 +375,9 @@ fn main() {
             }
             ("delete", Some(cmd)) => {
                 let id: Vec<_> = cmd.values_of("id").unwrap().collect();
-                let zone = cmd.value_of("zone").unwrap();
+                let zone = resolve_zone(&api, cmd);
 
-                dns::delete(&api, zone, id)
+                dns::delete(&api, &zone, id)
             }
             _ => {}
         },
@@ -304,8 +386,8 @@ fn main() {
                 let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
                 zones::list(&api, 1, limit)
             }
-            _ => {}
+            _ => unimplemented!()
         },
-        _ => {} // Either no sub-command or one not tested for...
+        _ => unimplemented!()
     }
 }

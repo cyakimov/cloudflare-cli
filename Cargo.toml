@@ -1,9 +1,11 @@
 [package]
-name = "cloudflare-cli"
+name = "cflare"
 version = "0.1.0"
 authors = ["Carlos Yakimov <carlos@cyakimov.com>"]
 license = "MIT/Apache-2.0"
+description = "Cloudflare command-line tool"
 edition = "2018"
+readme = "README.md"
 keywords = ["cloudflare", "cli"]
 homepage = "https://github.com/cyakimov/cloudflare-cli"
 repository = "https://github.com/cyakimov/cloudflare-cli"
@@ -11,7 +13,12 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 clap = "2.33.0"
-cloudflare = { git = "https://github.com/cyakimov/cloudflare-rs", branch="add-missing-endpoints" }
+cloudflare = { git = "https://github.com/cyakimov/cloudflare-rs", branch="fix-listzones-endpoint" }
 serde_json = "1.0"
 serde = "1.0.105"
 tabular = "0.1.4"
+text_io = "0.1.8"
+colored = "1.9.3"
+failure = "0.1.7"
+dirs = "2.0.2"
+toml = "0.5.6"
