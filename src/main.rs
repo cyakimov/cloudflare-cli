@@ -157,12 +157,13 @@ fn main() {
     let zone = Arg::with_name("zone")
         .help("Zone name. e.g. mydomain.com")
         .long("zone")
+        .required_unless("zone-id")
         .takes_value(true);
     let zone_id = Arg::with_name("zone-id")
         .long("zone-id")
         .short("z")
         .takes_value(true)
-        .required_unless("zone");
+        .conflicts_with("zone");
 
     let zone_args = [zone, zone_id];
 
