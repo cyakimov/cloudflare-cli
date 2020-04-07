@@ -137,22 +137,19 @@ fn main() {
             .long("email")
             .short("e")
             .help("Email address associated with your account")
-            .takes_value(true)
-            .env("CFLARE_EMAIL"),
+            .takes_value(true),
         Arg::with_name("key")
             .global(true)
             .long("key")
             .short("k")
             .help("API token generated on the \"My Account\" page")
-            .takes_value(true)
-            .env("CFLARE_KEY"),
+            .takes_value(true),
         Arg::with_name("token")
             .global(true)
             .long("token")
             .short("t")
             .help("API token generated on the \"My Account\" page")
-            .takes_value(true)
-            .env("CFLARE_TOKEN"),
+            .takes_value(true),
     ];
     let zone = Arg::with_name("zone")
         .help("Zone name. e.g. mydomain.com")
@@ -182,14 +179,14 @@ fn main() {
         SubCommand::with_name("accounts")
             .subcommands(vec![
                 SubCommand::with_name("list").arg(
-                    limit.clone().default_value("50")
+                    limit.clone()
                 ),
                 SubCommand::with_name("describe"),
             ]),
         SubCommand::with_name("zones")
             .subcommands(vec![
                 SubCommand::with_name("list")
-                    .arg(limit.clone().default_value("50")),
+                    .arg(limit.clone()),
             ]),
         SubCommand::with_name("dns")
             .subcommands(vec![
@@ -198,7 +195,7 @@ fn main() {
                     .arg(Arg::with_name("wide").long("wide").short("w"))
                     .arg(Arg::with_name("name").long("name").short("n")
                         .takes_value(true).help("Filter by name. Performs partial matching"))
-                    .arg(limit.clone().default_value("50")),
+                    .arg(limit.clone()),
                 SubCommand::with_name("delete")
                     .args(&zone_args.clone())
                     .arg(
@@ -221,12 +218,11 @@ fn main() {
                         .required(true)
                         .help("DNS record content")
                     )
-                    .arg(record_type.clone().required(true).default_value("A"))
+                    .arg(record_type.clone().required(true))
                     .arg(Arg::with_name("ttl")
                         .long("ttl")
                         .validator(valid_ttl)
                         .takes_value(true)
-                        .default_value("1")
                         .required(true)
                         .help("Time to live for DNS record. Value of 1 is 'automatic'")
                     )
@@ -238,7 +234,6 @@ fn main() {
                         .long("priority")
                         .validator(valid_priority)
                         .takes_value(true)
-                        .default_value("0")
                         .help("Used with some records like MX and SRV to determine priority")
                     ),
                 SubCommand::with_name("update")
@@ -279,8 +274,10 @@ fn main() {
         .name(env!("CARGO_PKG_NAME"))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .version(env!("CARGO_PKG_VERSION"))
-        .subcommands(commands)
         .setting(AppSettings::ArgRequiredElseHelp)
+        .setting(AppSettings::DeriveDisplayOrder)
+        .setting(AppSettings::VersionlessSubcommands)
+        .subcommands(commands)
         .args(&auth_args)
         .get_matches();
 
@@ -298,15 +295,22 @@ fn main() {
     match app.subcommand() {
         ("accounts", Some(sub_cmd)) => match sub_cmd.subcommand() {
             ("list", Some(cmd)) => {
-                let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
+                let limit: u32 = cmd.value_of("limit").unwrap_or("50").parse().unwrap();
                 accounts::list(&api, 1, limit)
             }
             _ => terminal::error("Unknown command")
         },
+        ("zones", Some(sub_cmd)) => match sub_cmd.subcommand() {
+            ("list", Some(cmd)) => {
+                let limit: u32 = cmd.value_of("limit").unwrap_or("50").parse().unwrap();
+                zones::list(&api, 1, limit)
+            }
+            _ => unimplemented!()
+        },
         ("dns", Some(sub_cmd)) => match sub_cmd.subcommand() {
             ("list", Some(cmd)) => {
                 let zone = resolve_zone(&api, cmd);
-                let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
+                let limit: u32 = cmd.value_of("limit").unwrap_or("50").parse().unwrap();
                 let wide = cmd.is_present("wide");
                 let name = cmd.value_of("name");
 
@@ -322,11 +326,11 @@ fn main() {
             ("create", Some(cmd)) => {
                 let zone = resolve_zone(&api, cmd);
                 let content = cmd.value_of("content").unwrap();
-                let record_type = cmd.value_of("type").unwrap();
+                let record_type = cmd.value_of("type").unwrap_or("A");
                 let proxied = cmd.is_present("proxied");
                 let name = cmd.value_of("name").unwrap();
-                let ttl: u32 = cmd.value_of("ttl").unwrap().parse().unwrap();
-                let priority: u16 = cmd.value_of("priority").unwrap().parse().unwrap();
+                let ttl: u32 = cmd.value_of("ttl").unwrap_or("1").parse().unwrap();
+                let priority: u16 = cmd.value_of("priority").unwrap_or("0").parse().unwrap();
 
                 let record = dns::CreateParams {
                     zone_id: &zone,
@@ -382,13 +386,6 @@ fn main() {
             }
             _ => {}
         },
-        ("zones", Some(sub_cmd)) => match sub_cmd.subcommand() {
-            ("list", Some(cmd)) => {
-                let limit: u32 = cmd.value_of("limit").unwrap().parse().unwrap();
-                zones::list(&api, 1, limit)
-            }
-            _ => unimplemented!()
-        },
-        _ => unimplemented!()
+        _ => unreachable!()
     }
 }
