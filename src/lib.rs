@@ -6,3 +6,4 @@ pub mod config;
 pub mod commands;
 pub mod terminal;
 pub mod http;
+pub mod api;

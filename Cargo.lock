@@ -143,6 +143,7 @@ checksum = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 name = "cflare"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "cloudflare",
  "colored",
@@ -185,7 +186,8 @@ dependencies = [
 [[package]]
 name = "cloudflare"
 version = "0.6.4"
-source = "git+https://github.com/cyakimov/cloudflare-rs?branch=fix-listzones-endpoint#973dfc61d8a72ef1943090abe945c9088d646790"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce60d3492dc5dd86054ac002eed08580cb509bc4f23121f20081aec964302b8"
 dependencies = [
  "async-trait",
  "chrono",

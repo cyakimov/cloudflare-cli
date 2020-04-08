@@ -1,6 +1,17 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use cloudflare::endpoints::dns::{CreateDnsRecord, CreateDnsRecordParams, DeleteDnsRecord, DeleteDnsRecordResponse, DnsContent, DnsRecord, DnsRecordDetails, ListDnsRecords, ListDnsRecordsParams, UpdateDnsRecord, UpdateDnsRecordParams};
+use cloudflare::endpoints::dns::{
+    CreateDnsRecord,
+    CreateDnsRecordParams,
+    DeleteDnsRecord,
+    DeleteDnsRecordResponse,
+    DnsContent,
+    DnsRecord,
+    ListDnsRecords,
+    ListDnsRecordsParams,
+    UpdateDnsRecord,
+    UpdateDnsRecordParams,
+};
 use cloudflare::framework::{
     apiclient::ApiClient,
     HttpApiClient,
@@ -8,6 +19,7 @@ use cloudflare::framework::{
 use tabular::Row;
 
 use crate::commands::table_from_cols;
+use crate::api::endpoints::dns::DnsRecordDetails;
 
 pub struct ListParams<'a, 'b> {
     pub zone_id: &'a str,
