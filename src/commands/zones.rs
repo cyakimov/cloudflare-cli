@@ -1,14 +1,15 @@
 use std::error::Error;
 
-use cloudflare::endpoints::zone::{ListZones, ListZonesParams, Zone};
+use cloudflare::endpoints::zone::{ListZonesParams};
 use cloudflare::framework::{apiclient::ApiClient, HttpApiClient, OrderDirection};
 use cloudflare::framework::response::{ApiFailure, ApiResponse};
 use tabular::Row;
 
 use crate::commands::table_from_cols;
+use crate::api::endpoints::zones::{ListZones, ZoneVec};
 
 pub fn list(api: &HttpApiClient, page: u32, limit: u32) {
-    let response: ApiResponse<Vec<Zone>> = api.request(&ListZones {
+    let response: ApiResponse<ZoneVec> = api.request(&ListZones {
         params: ListZonesParams {
             name: None,
             status: None,
@@ -21,7 +22,7 @@ pub fn list(api: &HttpApiClient, page: u32, limit: u32) {
     });
     match response {
         Ok(success) => {
-            let list: Vec<Zone> = success.result;
+            let list: ZoneVec = success.result;
             let columns = vec![
                 "ID",
                 "NAME",
@@ -32,17 +33,18 @@ pub fn list(api: &HttpApiClient, page: u32, limit: u32) {
 
             let mut table = table_from_cols(columns);
 
-            for record in list {
+            let vec1 = list.zones;
+            for record in vec1.iter() {
                 let plan: String;
 
-                match record.plan {
-                    Some(p) => plan = p.name,
+                match &record.plan {
+                    Some(p) => plan = p.name.to_owned(),
                     _ => plan = "-".to_string()
                 }
 
                 table.add_row(Row::new()
-                    .with_cell(record.id)
-                    .with_cell(record.name)
+                    .with_cell(&record.id)
+                    .with_cell(&record.name)
                     .with_cell(format!("{:?}", record.status))
                     .with_cell(plan)
                     .with_cell(if record.paused { "Yes" } else { "No" })

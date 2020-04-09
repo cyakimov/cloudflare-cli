@@ -1,5 +1,5 @@
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
-use cloudflare::endpoints::zone::{ListZones, ListZonesParams, Zone};
+use cloudflare::endpoints::zone::{ListZonesParams};
 #[allow(unused_imports)]
 use cloudflare::framework::{
     apiclient::ApiClient,
@@ -16,8 +16,9 @@ use cflare::commands::{
     dns,
     zones,
 };
+use cflare::config::{Config, get_global_config_path};
+use cflare::api::endpoints::zones::{ListZones, ZoneVec};
 use cflare::terminal;
-use cflare::config::{get_global_config_path, Config};
 
 const MAX_DNS_TTL: u32 = 2_147_483_647;
 
@@ -52,7 +53,7 @@ fn valid_ttl(arg: String) -> Result<(), String> {
 fn resolve_zone(api: &HttpApiClient, arg: &ArgMatches) -> String {
     if arg.is_present("zone-id") { arg.value_of("zone-id").unwrap().to_owned() } else {
         let zone = arg.value_of("zone").unwrap();
-        let res: ApiResponse<Vec<Zone>> = api.request(&ListZones {
+        let res: ApiResponse<ZoneVec> = api.request(&ListZones {
             params: ListZonesParams {
                 name: Some(String::from(zone)),
                 status: None,
@@ -66,7 +67,8 @@ fn resolve_zone(api: &HttpApiClient, arg: &ArgMatches) -> String {
 
         match res {
             Ok(success) => {
-                let zones = success.result;
+                let res: ZoneVec = success.result;
+                let zones = res.zones;
                 match zones.len() {
                     1 => zones[0].id.clone(),
                     _ => {
