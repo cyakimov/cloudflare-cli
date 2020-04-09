@@ -5,6 +5,13 @@ cloudflare-cli (cflare)
 
 ### 🚀 Installation
 
+#### Install with Homebrew
+
+```
+brew tap cyakimov/tools
+brew install cflare
+```
+
 #### Install with cargo
 
 ```shell script
@@ -25,10 +32,10 @@ List available commands with `cflare -h`
 Examples:
 
 ```shell script
-$ cflare accounts list
-$ cflare zones list
-$ cflare dns list --zone mydomain.com
-$ cflare dns create --zone mydomain.com -c 1.1.1.1 mysubdomain --ttl 3600
+cflare accounts list
+cflare zones list
+cflare dns list --zone mydomain.com
+cflare dns create --zone mydomain.com -c 1.1.1.1 mysubdomain --ttl 3600
 ```
 
 **Overriding config file credentials:**
