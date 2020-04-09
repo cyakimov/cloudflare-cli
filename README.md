@@ -7,9 +7,8 @@ cloudflare-cli (cflare)
 
 #### Install with Homebrew
 
-```
-brew tap cyakimov/tools
-brew install cflare
+```shell script
+brew install cyakimov/tools/cflare
 ```
 
 #### Install with cargo
