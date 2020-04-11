@@ -1,6 +1,8 @@
 cloudflare-cli (cflare)
 ------------
 
+![Build](https://github.com/cyakimov/cloudflare-cli/workflows/Build/badge.svg)
+
 `cflare` is a command-line tool that lets you manage some aspects of your Cloudflare account.
 
 ### 🚀 Installation
