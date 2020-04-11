@@ -1,13 +1,11 @@
-#[cfg(not(target_os = "windows"))]
+use std::fs;
 use std::fs::File;
 #[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::PermissionsExt;
-#[cfg(not(target_os = "windows"))]
+use std::path::Path;
 use std::path::PathBuf;
 
 use cloudflare::framework::auth::Credentials;
-use std::fs;
-use std::path::Path;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(untagged)]
