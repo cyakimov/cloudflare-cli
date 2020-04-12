@@ -1,6 +1,6 @@
 [package]
 name = "cflare"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Carlos Yakimov <carlos@cyakimov.com>"]
 license = "MIT/Apache-2.0"
 description = "Cloudflare command-line tool"
