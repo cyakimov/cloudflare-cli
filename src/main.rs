@@ -244,7 +244,7 @@ fn main() {
                     )
                     .arg(Arg::with_name("proxied")
                         .long("proxied")
-                        .help("Used with some records like MX and SRV to determine priority")
+                        .help("Whether the record would be proxied by Cloudflare")
                     )
                     .arg(Arg::with_name("priority")
                         .long("priority")
